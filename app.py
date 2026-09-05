@@ -19,6 +19,21 @@ except ImportError:
     MODELOS_DISPONIBLE = False
     MODELOS_CHINOS = {}
 
+# ========== VERIFICAR MODELOS ACTIVOS AL INICIO ==========
+if MODELOS_DISPONIBLE and MODELOS_CHINOS:
+    try:
+        from utils.verificar_modelos import obtener_modelos_activos
+        print("🔍 Verificando modelos activos...")
+        MODELOS_ACTIVOS = obtener_modelos_activos(MODELOS_CHINOS)
+        if MODELOS_ACTIVOS:
+            MODELOS_CHINOS = MODELOS_ACTIVOS
+            print(f"✅ {len(MODELOS_CHINOS)} modelos activos")
+        else:
+            print("⚠️ No hay modelos activos disponibles")
+            MODELOS_DISPONIBLE = False
+    except ImportError:
+        print("⚠️ utils/verificar_modelos.py no encontrado")
+
 # Luego importar IA
 try:
     from utils.ia import ia
@@ -270,8 +285,16 @@ if "chat_historial" not in st.session_state:
 if "scheduler_activo" not in st.session_state:
     st.session_state.scheduler_activo = False
 
+# ========== SELECCIÓN AUTOMÁTICA DEL PRIMER MODELO ACTIVO ==========
 if "modelo_actual" not in st.session_state:
-    st.session_state.modelo_actual = "gemma4"
+    if MODELOS_DISPONIBLE and MODELOS_CHINOS:
+        # Usar el primer modelo activo disponible
+        primer_modelo = list(MODELOS_CHINOS.keys())[0]
+        st.session_state.modelo_actual = primer_modelo
+        print(f"✅ Modelo predeterminado seleccionado: {primer_modelo}")
+    else:
+        st.session_state.modelo_actual = "glm52"
+        print("⚠️ No hay modelos activos, usando fallback: glm52")
 
 # ========== DATOS DE NEGOCIOS CON TODAS LAS SECCIONES ==========
 if "negocios" not in st.session_state:
@@ -620,8 +643,8 @@ def responder_chat(mensaje):
     
     # ========== COMANDO: CAMBIAR MODELO ==========
     if "cambiar modelo" in mensaje_lower or "modelo" in mensaje_lower:
-        if not MODELOS_DISPONIBLE:
-            return "❌ Módulo de modelos no disponible. Crea utils/modelos.py", "Sistema"
+        if not MODELOS_DISPONIBLE or not MODELOS_CHINOS:
+            return "❌ No hay modelos disponibles. Verifica tu conexión a OpenRouter.", "Sistema"
         
         # Verificar si el usuario especificó un modelo
         for key in MODELOS_CHINOS.keys():
@@ -645,7 +668,7 @@ def responder_chat(mensaje):
 
 **Modelo actual:** {actual}
 
-Para cambiar, escribe: `cambiar modelo gemma4` (reemplaza con el nombre del modelo)
+Para cambiar, escribe: `cambiar modelo glm52` (reemplaza con el nombre del modelo)
 """, "Sistema"
     
     # ========== COMANDO: MODELO ACTUAL ==========
@@ -737,7 +760,7 @@ Para cambiar, escribe: `cambiar modelo gemma4` (reemplaza con el nombre del mode
 
 **🧠 Modelos:**
 • `modelo` - Ver modelos disponibles
-• `cambiar modelo gemma4` - Cambiar a Gemma 4
+• `cambiar modelo glm52` - Cambiar a GLM-5.2
 • `modelo actual` - Ver modelo en uso
 
 **📧 Correo:**
@@ -1303,7 +1326,7 @@ with st.form(key="chat_form", clear_on_submit=True):
         mensaje = st.text_input(
             "Pregunta a BuildSmart lo que quieras...",
             key="chat_input",
-            placeholder="Ej: ¿Cuántas tareas tengo? o cambiar modelo gemma4",
+            placeholder="Ej: ¿Cuántas tareas tengo? o cambiar modelo glm52",
             label_visibility="collapsed"
         )
     with col2:
