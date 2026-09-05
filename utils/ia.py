@@ -8,8 +8,9 @@ load_dotenv()
 
 class IA:
     def __init__(self):
-        # 🔑 La clave se lee desde variables de entorno (NUNCA en el código)
+        # 🔑 La clave se lee desde variables de entorno
         self.api_key = os.getenv('OPENROUTER_API_KEY', '')
+        # ✅ URL CORRECTA de OpenRouter
         self.api_url = "https://openrouter.ai/api/v1/chat/completions"
         # Modelo gratuito
         self.modelo = "deepseek/deepseek-r1:free"
@@ -41,7 +42,7 @@ class IA:
                 resultado = response.json()
                 return resultado['choices'][0]['message']['content']
             else:
-                return f"⚠️ Error: {response.status_code}"
+                return f"⚠️ Error: {response.status_code} - {response.text}"
                 
         except Exception as e:
             return f"⚠️ Error de conexión: {str(e)}"
