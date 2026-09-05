@@ -11,12 +11,22 @@ import re
 from datetime import timedelta
 
 # ========== IMPORTAR MÓDULOS ==========
+# Primero importar modelos para que estén disponibles
+try:
+    from utils.modelos import MODELOS_CHINOS
+    MODELOS_DISPONIBLE = True
+except ImportError:
+    MODELOS_DISPONIBLE = False
+    MODELOS_CHINOS = {}
+
+# Luego importar IA
 try:
     from utils.ia import ia
     IA_DISPONIBLE = True
-except ImportError:
+except ImportError as e:
     IA_DISPONIBLE = False
     ia = None
+    print(f"⚠️ Error al importar ia: {e}")
 
 try:
     from utils.web_generator import web_generator
@@ -52,13 +62,6 @@ try:
 except ImportError:
     RESEARCH_DISPONIBLE = False
     market_research = None
-
-try:
-    from utils.modelos import MODELOS_CHINOS
-    MODELOS_DISPONIBLE = True
-except ImportError:
-    MODELOS_DISPONIBLE = False
-    MODELOS_CHINOS = {}
 
 # ========== CONFIGURACIÓN ==========
 st.set_page_config(
@@ -623,10 +626,15 @@ def responder_chat(mensaje):
         # Verificar si el usuario especificó un modelo
         for key in MODELOS_CHINOS.keys():
             if key in mensaje_lower:
-                from utils.ia import ia
-                resultado = ia.cambiar_modelo(key)
-                st.session_state.modelo_actual = key
-                return resultado, "Sistema"
+                # Verificar que ia esté disponible
+                if not IA_DISPONIBLE or ia is None:
+                    return "❌ El módulo de IA no está disponible. Verifica utils/ia.py", "Sistema"
+                try:
+                    resultado = ia.cambiar_modelo(key)
+                    st.session_state.modelo_actual = key
+                    return resultado, "Sistema"
+                except Exception as e:
+                    return f"❌ Error al cambiar modelo: {str(e)}", "Sistema"
         
         # Si no especificó, mostrar los modelos disponibles
         lista = "\n".join([f"  • `{key}`: {m['nombre']} - {m['descripcion'][:50]}..." for key, m in MODELOS_CHINOS.items()])
@@ -760,7 +768,7 @@ Para cambiar, escribe: `cambiar modelo ox_alpha` (reemplaza con el nombre del mo
         return "🔍 Para investigar un tema, usa la sección 'Investigación de Mercado' en el dashboard.", "Sistema"
     
     # ========== IA REAL ==========
-    if IA_DISPONIBLE and ia:
+    if IA_DISPONIBLE and ia is not None:
         try:
             contexto = ""
             if st.session_state.negocio_seleccionado:
