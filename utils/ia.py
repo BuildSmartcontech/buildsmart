@@ -10,17 +10,15 @@ load_dotenv()
 class IA:
     def __init__(self):
         self.entorno = os.getenv('ENTORNO', 'desarrollo')
-        # Clave de DeepSeek (se lee desde variables de entorno)
+        # 🔑 La clave se lee desde variables de entorno (GitHub Secrets)
         self.deepseek_key = os.getenv('DEEPSEEK_API_KEY', '')
         
     def chat(self, mensaje, sistema="Eres un asistente útil y profesional."):
         """Envía un mensaje y obtiene respuesta, usando la IA adecuada según el entorno."""
         
         if self.entorno == 'produccion' and self.deepseek_key:
-            # Modo NUBE: Usar DeepSeek API
             return self._chat_deepseek(mensaje, sistema)
         else:
-            # Modo LOCAL: Usar Ollama
             return self._chat_ollama(mensaje, sistema)
     
     def _chat_ollama(self, mensaje, sistema):
@@ -29,7 +27,8 @@ class IA:
             prompt = f"{sistema}\n\nUsuario: {mensaje}\n\nAsistente:"
             response = requests.post(
                 "http://localhost:11434/api/generate",
-                json={"model": "llama3.1:8b", "prompt": prompt, "stream": False}
+                json={"model": "llama3.1:8b", "prompt": prompt, "stream": False},
+                timeout=60
             )
             if response.status_code == 200:
                 return response.json().get('response', '')
@@ -58,7 +57,8 @@ class IA:
             response = requests.post(
                 "https://api.deepseek.com/v1/chat/completions",
                 headers=headers,
-                json=data
+                json=data,
+                timeout=60
             )
             if response.status_code == 200:
                 return response.json()['choices'][0]['message']['content']
