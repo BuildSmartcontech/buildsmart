@@ -1,27 +1,11 @@
-# utils/modelos.py - Lista de modelos chinos
+# utils/modelos.py - Lista de modelos chinos gratuitos que funcionan en OpenRouter
 
 MODELOS_CHINOS = {
-    "ox_alpha": {
-        "nombre": "Google Gemma 4 31B (Gratuito)",
-        "proveedor": "Google",
-        "identificador": "google/gemma-4-31b:free",
-        "descripcion": "Modelo gratuito de Google. Multimodal y potente.",
-        "contexto": "256K tokens",
-        "gratuito": True
-    },
-    "qwen3_coder": {
-        "nombre": "Google Gemma 4 31B",
-        "proveedor": "Google",
-        "identificador": "google/gemma-4-31b:free",
-        "descripcion": "Multimodal. Buen equilibrio calidad/velocidad.",
-        "contexto": "256K tokens",
-        "gratuito": True
-    },
     "gemma4": {
         "nombre": "Google Gemma 4 31B",
         "proveedor": "Google",
         "identificador": "google/gemma-4-31b:free",
-        "descripcion": "Multimodal potente. Buen equilibrio calidad/velocidad.",
+        "descripcion": "Multimodal (texto, imagen, video). Buen equilibrio calidad/velocidad.",
         "contexto": "256K tokens",
         "gratuito": True
     },
@@ -46,6 +30,22 @@ MODELOS_CHINOS = {
         "proveedor": "Zhipu AI",
         "identificador": "z-ai/glm-5.2:free",
         "descripcion": "Excelente en chino y tareas de agente.",
+        "contexto": "128K tokens",
+        "gratuito": True
+    },
+    "mistral_free": {
+        "nombre": "Mistral 7B (Gratuito)",
+        "proveedor": "Mistral AI",
+        "identificador": "mistralai/mistral-7b-instruct:free",
+        "descripcion": "Buen rendimiento general y en código.",
+        "contexto": "8K tokens",
+        "gratuito": True
+    },
+    "phi3": {
+        "nombre": "Microsoft Phi-3 Mini (Gratuito)",
+        "proveedor": "Microsoft",
+        "identificador": "microsoft/phi-3-mini-128k-instruct:free",
+        "descripcion": "Rápido y eficiente. Buen razonamiento.",
         "contexto": "128K tokens",
         "gratuito": True
     }
