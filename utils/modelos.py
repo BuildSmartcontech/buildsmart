@@ -2,13 +2,12 @@
 
 MODELOS_CHINOS = {
     "ox_alpha": {
-        "nombre": "Ox Alpha (GLM-5.3-Flash)",
-        "proveedor": "Zhipu AI",
-        "identificador": "z-ai/glm-5.3-flash",
-        "descripcion": "Multimodal (texto, imagen, video). Contexto 1M tokens. $0.075/M entrada, $0.25/M salida.",
+        "nombre": "Qwen3 Coder 480B (Gratuito)",
+        "proveedor": "Alibaba",
+        "identificador": "qwen/qwen3-coder-480b-a35b:free",
+        "descripcion": "Especializado en programación y razonamiento. Multimodal.",
         "contexto": "1M tokens",
-        "gratuito": False,
-        "precio": "$0.075/M entrada, $0.25/M salida"
+        "gratuito": True
     },
     "qwen3_coder": {
         "nombre": "Qwen3 Coder 480B",
