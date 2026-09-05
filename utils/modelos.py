@@ -2,19 +2,19 @@
 
 MODELOS_CHINOS = {
     "ox_alpha": {
-        "nombre": "Qwen 2.5 72B (Gratuito)",
-        "proveedor": "Alibaba",
-        "identificador": "qwen/qwen-2.5-72b-instruct:free",
-        "descripcion": "Modelo gratuito de Alibaba. Buen rendimiento en tareas generales.",
-        "contexto": "128K tokens",
+        "nombre": "Google Gemma 4 31B (Gratuito)",
+        "proveedor": "Google",
+        "identificador": "google/gemma-4-31b:free",
+        "descripcion": "Modelo gratuito de Google. Multimodal y potente.",
+        "contexto": "256K tokens",
         "gratuito": True
     },
     "qwen3_coder": {
-        "nombre": "Qwen 2.5 72B",
-        "proveedor": "Alibaba",
-        "identificador": "qwen/qwen-2.5-72b-instruct:free",
-        "descripcion": "Buen rendimiento en programación y razonamiento.",
-        "contexto": "128K tokens",
+        "nombre": "Google Gemma 4 31B",
+        "proveedor": "Google",
+        "identificador": "google/gemma-4-31b:free",
+        "descripcion": "Multimodal. Buen equilibrio calidad/velocidad.",
+        "contexto": "256K tokens",
         "gratuito": True
     },
     "gemma4": {
