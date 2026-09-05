@@ -1,5 +1,5 @@
 # app.py - BuildSmart Operations Center
-# VERSIÓN COMPLETA CON IA (Ollama) + Web Generator + Email + Social + Automation + Research
+# VERSIÓN COMPLETA CON IA (Modelos Chinos Gratuitos) + Web Generator + Email + Social + Automation + Research
 
 import streamlit as st
 import datetime
@@ -264,14 +264,14 @@ if "negocio_seleccionado" not in st.session_state:
 
 if "chat_historial" not in st.session_state:
     st.session_state.chat_historial = [
-        {"role": "agent", "agente": "Orquestador", "content": "👋 ¡Bienvenido a BuildSmart Holdings! Soy tu asistente. Puedes crear nuevos negocios, gestionar tareas y mucho más. (IA: Ollama)"},
+        {"role": "agent", "agente": "Orquestador", "content": "👋 ¡Bienvenido a BuildSmart Holdings! Soy tu asistente. Puedes crear nuevos negocios, gestionar tareas y mucho más. (IA: Modelos Chinos)"},
     ]
 
 if "scheduler_activo" not in st.session_state:
     st.session_state.scheduler_activo = False
 
 if "modelo_actual" not in st.session_state:
-    st.session_state.modelo_actual = "ox_alpha"
+    st.session_state.modelo_actual = "gemma4"
 
 # ========== DATOS DE NEGOCIOS CON TODAS LAS SECCIONES ==========
 if "negocios" not in st.session_state:
@@ -614,7 +614,7 @@ def obtener_nombre_modelo():
 # ========== FUNCIÓN DE CHAT CON CORREO INTEGRADO ==========
 
 def responder_chat(mensaje):
-    """Responde usando IA real (Ollama o modelo chino)"""
+    """Responde usando IA real (modelos chinos gratuitos)"""
     
     mensaje_lower = mensaje.lower()
     
@@ -626,7 +626,6 @@ def responder_chat(mensaje):
         # Verificar si el usuario especificó un modelo
         for key in MODELOS_CHINOS.keys():
             if key in mensaje_lower:
-                # Verificar que ia esté disponible
                 if not IA_DISPONIBLE or ia is None:
                     return "❌ El módulo de IA no está disponible. Verifica utils/ia.py", "Sistema"
                 try:
@@ -646,7 +645,7 @@ def responder_chat(mensaje):
 
 **Modelo actual:** {actual}
 
-Para cambiar, escribe: `cambiar modelo ox_alpha` (reemplaza con el nombre del modelo)
+Para cambiar, escribe: `cambiar modelo gemma4` (reemplaza con el nombre del modelo)
 """, "Sistema"
     
     # ========== COMANDO: MODELO ACTUAL ==========
@@ -738,7 +737,7 @@ Para cambiar, escribe: `cambiar modelo ox_alpha` (reemplaza con el nombre del mo
 
 **🧠 Modelos:**
 • `modelo` - Ver modelos disponibles
-• `cambiar modelo ox_alpha` - Cambiar a Ox Alpha
+• `cambiar modelo gemma4` - Cambiar a Gemma 4
 • `modelo actual` - Ver modelo en uso
 
 **📧 Correo:**
@@ -767,7 +766,7 @@ Para cambiar, escribe: `cambiar modelo ox_alpha` (reemplaza con el nombre del mo
     if "investigar" in mensaje_lower or "investigación" in mensaje_lower:
         return "🔍 Para investigar un tema, usa la sección 'Investigación de Mercado' en el dashboard.", "Sistema"
     
-    # ========== IA REAL ==========
+    # ========== IA REAL (Modelos Chinos) ==========
     if IA_DISPONIBLE and ia is not None:
         try:
             contexto = ""
@@ -1304,7 +1303,7 @@ with st.form(key="chat_form", clear_on_submit=True):
         mensaje = st.text_input(
             "Pregunta a BuildSmart lo que quieras...",
             key="chat_input",
-            placeholder="Ej: ¿Cuántas tareas tengo? o cambiar modelo ox_alpha",
+            placeholder="Ej: ¿Cuántas tareas tengo? o cambiar modelo gemma4",
             label_visibility="collapsed"
         )
     with col2:
@@ -1339,7 +1338,7 @@ if st.session_state.chat_historial:
 
 if st.button("🗑️ Limpiar chat", use_container_width=False):
     st.session_state.chat_historial = [
-        {"role": "agent", "agente": "Orquestador", "content": "👋 ¡Bienvenido a BuildSmart Holdings! Soy tu asistente. (IA: Ollama)"}
+        {"role": "agent", "agente": "Orquestador", "content": "👋 ¡Bienvenido a BuildSmart Holdings! Soy tu asistente. (IA: Modelos Chinos)"}
     ]
     st.rerun()
 
