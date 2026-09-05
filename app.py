@@ -53,6 +53,13 @@ except ImportError:
     RESEARCH_DISPONIBLE = False
     market_research = None
 
+try:
+    from utils.modelos import MODELOS_CHINOS
+    MODELOS_DISPONIBLE = True
+except ImportError:
+    MODELOS_DISPONIBLE = False
+    MODELOS_CHINOS = {}
+
 # ========== CONFIGURACIÓN ==========
 st.set_page_config(
     page_title="BuildSmart Operations",
@@ -237,6 +244,14 @@ st.markdown("""
     .feature-badge.off {
         background: #dc3545;
     }
+    .modelo-actual {
+        background: #e8f4fd;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        color: #0f3460;
+        border: 1px solid #0f3460;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -251,6 +266,9 @@ if "chat_historial" not in st.session_state:
 
 if "scheduler_activo" not in st.session_state:
     st.session_state.scheduler_activo = False
+
+if "modelo_actual" not in st.session_state:
+    st.session_state.modelo_actual = "ox_alpha"
 
 # ========== DATOS DE NEGOCIOS CON TODAS LAS SECCIONES ==========
 if "negocios" not in st.session_state:
@@ -584,12 +602,49 @@ def investigar_mercado(tema):
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
+def obtener_nombre_modelo():
+    """Obtener el nombre legible del modelo actual"""
+    if MODELOS_DISPONIBLE and st.session_state.modelo_actual in MODELOS_CHINOS:
+        return MODELOS_CHINOS[st.session_state.modelo_actual]["nombre"]
+    return st.session_state.modelo_actual
+
 # ========== FUNCIÓN DE CHAT CON CORREO INTEGRADO ==========
 
 def responder_chat(mensaje):
-    """Responde usando IA real (Ollama) cuando está disponible"""
+    """Responde usando IA real (Ollama o modelo chino)"""
     
     mensaje_lower = mensaje.lower()
+    
+    # ========== COMANDO: CAMBIAR MODELO ==========
+    if "cambiar modelo" in mensaje_lower or "modelo" in mensaje_lower:
+        if not MODELOS_DISPONIBLE:
+            return "❌ Módulo de modelos no disponible. Crea utils/modelos.py", "Sistema"
+        
+        # Verificar si el usuario especificó un modelo
+        for key in MODELOS_CHINOS.keys():
+            if key in mensaje_lower:
+                from utils.ia import ia
+                resultado = ia.cambiar_modelo(key)
+                st.session_state.modelo_actual = key
+                return resultado, "Sistema"
+        
+        # Si no especificó, mostrar los modelos disponibles
+        lista = "\n".join([f"  • `{key}`: {m['nombre']} - {m['descripcion'][:50]}..." for key, m in MODELOS_CHINOS.items()])
+        actual = obtener_nombre_modelo()
+        return f"""
+📚 **Modelos Chinos Disponibles:**
+
+{lista}
+
+**Modelo actual:** {actual}
+
+Para cambiar, escribe: `cambiar modelo ox_alpha` (reemplaza con el nombre del modelo)
+""", "Sistema"
+    
+    # ========== COMANDO: MODELO ACTUAL ==========
+    if "modelo actual" in mensaje_lower or "que modelo" in mensaje_lower:
+        actual = obtener_nombre_modelo()
+        return f"🧠 **Modelo actual:** {actual}", "Sistema"
     
     # ========== COMANDO: ENVIAR CORREO DESDE EL CHAT ==========
     if "enviar correo" in mensaje_lower or "mandar correo" in mensaje_lower:
@@ -673,6 +728,11 @@ def responder_chat(mensaje):
         return """
 📚 **COMANDOS DISPONIBLES:**
 
+**🧠 Modelos:**
+• `modelo` - Ver modelos disponibles
+• `cambiar modelo ox_alpha` - Cambiar a Ox Alpha
+• `modelo actual` - Ver modelo en uso
+
 **📧 Correo:**
 • `enviar correo a correo@ejemplo.com asunto: ... contenido: ...` - Enviar correo
 • `correos enviados` - Ver cuántos correos has enviado
@@ -686,8 +746,6 @@ def responder_chat(mensaje):
 **🌐 Acciones:**
 • `Generar sitio web` - Crear landing page
 • `Investigar mercado` - Realizar investigación
-
-**Pregunta cualquier cosa - La IA responderá**
 """, "Orquestador"
     
     # ========== COMANDOS DE ACCIONES ==========
@@ -701,7 +759,7 @@ def responder_chat(mensaje):
     if "investigar" in mensaje_lower or "investigación" in mensaje_lower:
         return "🔍 Para investigar un tema, usa la sección 'Investigación de Mercado' en el dashboard.", "Sistema"
     
-    # ========== IA REAL (Ollama) ==========
+    # ========== IA REAL ==========
     if IA_DISPONIBLE and ia:
         try:
             contexto = ""
@@ -735,7 +793,9 @@ def responder_chat(mensaje):
             """
             
             respuesta = ia.chat(mensaje, sistema)
-            return respuesta, "Asistente IA (Ollama)"
+            # Mostrar el modelo actual en la respuesta
+            modelo_nombre = obtener_nombre_modelo()
+            return f"{respuesta}\n\n---\n🧠 *Usando: {modelo_nombre}*", f"Asistente IA ({modelo_nombre})"
             
         except Exception as e:
             return f"❌ Error con la IA: {str(e)}\n\n💡 Prueba con 'ayuda' para comandos básicos.", "Sistema"
@@ -766,6 +826,7 @@ st.markdown(f"""
         <div>
             <span class="status-active">✅ SISTEMA ACTIVO</span>
             <span style="margin-left: 1rem;">🔄 {datetime.datetime.now().strftime("%H:%M")}</span>
+            <span style="margin-left: 1rem;" class="modelo-actual">🧠 {obtener_nombre_modelo()}</span>
         </div>
     </div>
 </div>
@@ -1235,7 +1296,7 @@ with st.form(key="chat_form", clear_on_submit=True):
         mensaje = st.text_input(
             "Pregunta a BuildSmart lo que quieras...",
             key="chat_input",
-            placeholder="Ej: ¿Cuántas tareas tengo? o enviar correo a...",
+            placeholder="Ej: ¿Cuántas tareas tengo? o cambiar modelo ox_alpha",
             label_visibility="collapsed"
         )
     with col2:
@@ -1289,6 +1350,7 @@ st.markdown(f"""
     Social: {'✅' if SOCIAL_DISPONIBLE else '❌'} |
     Auto: {'✅' if AUTOMATION_DISPONIBLE else '❌'} |
     Research: {'✅' if RESEARCH_DISPONIBLE else '❌'} |
+    Modelo: {obtener_nombre_modelo()} |
     Última actualización: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
 </div>
 """, unsafe_allow_html=True)
