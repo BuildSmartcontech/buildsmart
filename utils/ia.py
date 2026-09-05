@@ -10,7 +10,7 @@ load_dotenv()
 class IA:
     def __init__(self):
         # 🔑 CLAVE DIRECTA PARA LA NUBE (se usa si no encuentra variable de entorno)
-        self.deepseek_key = os.getenv('DEEPSEEK_API_KEY', 'sk-c9676531aa184627aebc30f7eef050aa')
+        self.deepseek_key = os.getenv('DEEPSEEK_API_KEY', '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')
         self.entorno = os.getenv('ENTORNO', 'desarrollo')
         
     def chat(self, mensaje, sistema="Eres un asistente útil y profesional."):
