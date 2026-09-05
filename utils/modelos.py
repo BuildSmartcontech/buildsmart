@@ -1,13 +1,14 @@
-# utils/modelos.py - Lista de modelos chinos gratuitos
+# utils/modelos.py - Lista de modelos chinos
 
 MODELOS_CHINOS = {
     "ox_alpha": {
         "nombre": "Ox Alpha (GLM-5.3-Flash)",
         "proveedor": "Zhipu AI",
-        "identificador": "stealth/ox-alpha",
-        "descripcion": "Multimodal: texto, imagen, video. Rendimiento superior en codificación.",
+        "identificador": "z-ai/glm-5.3-flash",
+        "descripcion": "Multimodal (texto, imagen, video). Contexto 1M tokens. $0.075/M entrada, $0.25/M salida.",
         "contexto": "1M tokens",
-        "gratuito": True
+        "gratuito": False,
+        "precio": "$0.075/M entrada, $0.25/M salida"
     },
     "qwen3_coder": {
         "nombre": "Qwen3 Coder 480B",
