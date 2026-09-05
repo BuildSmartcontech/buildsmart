@@ -2,19 +2,19 @@
 
 MODELOS_CHINOS = {
     "ox_alpha": {
-        "nombre": "Qwen3 Coder 480B (Gratuito)",
+        "nombre": "Qwen 2.5 72B (Gratuito)",
         "proveedor": "Alibaba",
-        "identificador": "qwen/qwen3-coder-480b-a35b:free",
-        "descripcion": "Especializado en programación y razonamiento. Multimodal.",
-        "contexto": "1M tokens",
+        "identificador": "qwen/qwen-2.5-72b-instruct:free",
+        "descripcion": "Modelo gratuito de Alibaba. Buen rendimiento en tareas generales.",
+        "contexto": "128K tokens",
         "gratuito": True
     },
     "qwen3_coder": {
-        "nombre": "Qwen3 Coder 480B",
+        "nombre": "Qwen 2.5 72B",
         "proveedor": "Alibaba",
-        "identificador": "qwen/qwen3-coder-480b-a35b:free",
-        "descripcion": "Especializado en programación. Multimodal.",
-        "contexto": "1M tokens",
+        "identificador": "qwen/qwen-2.5-72b-instruct:free",
+        "descripcion": "Buen rendimiento en programación y razonamiento.",
+        "contexto": "128K tokens",
         "gratuito": True
     },
     "gemma4": {
