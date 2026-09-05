@@ -9,16 +9,18 @@ load_dotenv()
 
 class IA:
     def __init__(self):
+        # 🔑 CLAVE DIRECTA PARA LA NUBE (se usa si no encuentra variable de entorno)
+        self.deepseek_key = os.getenv('DEEPSEEK_API_KEY', 'sk-c9676531aa184627aebc30f7eef050aa')
         self.entorno = os.getenv('ENTORNO', 'desarrollo')
-        # 🔑 La clave se lee desde variables de entorno (GitHub Secrets)
-        self.deepseek_key = os.getenv('DEEPSEEK_API_KEY', '')
         
     def chat(self, mensaje, sistema="Eres un asistente útil y profesional."):
         """Envía un mensaje y obtiene respuesta, usando la IA adecuada según el entorno."""
         
-        if self.entorno == 'produccion' and self.deepseek_key:
+        # SIEMPRE usar DeepSeek si hay clave (en nube o local)
+        if self.deepseek_key:
             return self._chat_deepseek(mensaje, sistema)
         else:
+            # Si no hay clave, usar Ollama
             return self._chat_ollama(mensaje, sistema)
     
     def _chat_ollama(self, mensaje, sistema):
@@ -38,9 +40,6 @@ class IA:
     
     def _chat_deepseek(self, mensaje, sistema):
         """Usa DeepSeek API en la nube."""
-        if not self.deepseek_key:
-            return "⚠️ No se encontró la API Key de DeepSeek en las variables de entorno."
-        
         try:
             headers = {
                 "Authorization": f"Bearer {self.deepseek_key}",
