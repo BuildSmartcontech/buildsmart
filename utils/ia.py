@@ -12,8 +12,8 @@ class IA:
         self.api_key = os.getenv('OPENROUTER_API_KEY', '')
         # ✅ URL CORRECTA de OpenRouter
         self.api_url = "https://openrouter.ai/api/v1/chat/completions"
-        # Modelo gratuito
-        self.modelo = "deepseek/deepseek-r1:free"
+        # ✅ Modelo gratuito disponible en OpenRouter
+        self.modelo = "google/gemma-2-9b-it:free"
         
     def chat(self, mensaje, sistema="Eres un asistente útil y profesional."):
         """Envía un mensaje y obtiene respuesta usando OpenRouter."""
