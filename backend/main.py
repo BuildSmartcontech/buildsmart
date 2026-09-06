@@ -1,12 +1,17 @@
 # backend/main.py - FastAPI Backend para BuildSmart con Orquestador LangGraph
 
+import sys
+import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import httpx
-import os
 from dotenv import load_dotenv
+
+# ========== AGREGAR RUTA DEL PROYECTO AL PATH ==========
+# Esto permite importar módulos como 'backend.orquestador'
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 load_dotenv()
 
