@@ -1,5 +1,5 @@
 # app.py - BuildSmart Operations Center
-# VERSIÓN COMPLETA CON IA (Modelos Chinos Gratuitos) + Web Generator + Email + Social + Automation + Research
+# VERSIÓN CON BACKEND FASTAPI (Híbrido Local + Nube)
 
 import streamlit as st
 import datetime
@@ -8,41 +8,14 @@ import random
 import json
 import os
 import re
+import requests
 from datetime import timedelta
 
+# ========== CONFIGURACIÓN ==========
+# URL del backend FastAPI
+BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:8000')
+
 # ========== IMPORTAR MÓDULOS ==========
-# Primero importar modelos para que estén disponibles
-try:
-    from utils.modelos import MODELOS_CHINOS
-    MODELOS_DISPONIBLE = True
-except ImportError:
-    MODELOS_DISPONIBLE = False
-    MODELOS_CHINOS = {}
-
-# ========== VERIFICAR MODELOS ACTIVOS AL INICIO ==========
-if MODELOS_DISPONIBLE and MODELOS_CHINOS:
-    try:
-        from utils.verificar_modelos import obtener_modelos_activos
-        print("🔍 Verificando modelos activos...")
-        MODELOS_ACTIVOS = obtener_modelos_activos(MODELOS_CHINOS)
-        if MODELOS_ACTIVOS:
-            MODELOS_CHINOS = MODELOS_ACTIVOS
-            print(f"✅ {len(MODELOS_CHINOS)} modelos activos")
-        else:
-            print("⚠️ No hay modelos activos disponibles")
-            MODELOS_DISPONIBLE = False
-    except ImportError:
-        print("⚠️ utils/verificar_modelos.py no encontrado")
-
-# Luego importar IA
-try:
-    from utils.ia import ia
-    IA_DISPONIBLE = True
-except ImportError as e:
-    IA_DISPONIBLE = False
-    ia = None
-    print(f"⚠️ Error al importar ia: {e}")
-
 try:
     from utils.web_generator import web_generator
     WEB_DISPONIBLE = True
@@ -262,7 +235,7 @@ st.markdown("""
     .feature-badge.off {
         background: #dc3545;
     }
-    .modelo-actual {
+    .backend-status {
         background: #e8f4fd;
         padding: 5px 10px;
         border-radius: 20px;
@@ -279,22 +252,22 @@ if "negocio_seleccionado" not in st.session_state:
 
 if "chat_historial" not in st.session_state:
     st.session_state.chat_historial = [
-        {"role": "agent", "agente": "Orquestador", "content": "👋 ¡Bienvenido a BuildSmart Holdings! Soy tu asistente. Puedes crear nuevos negocios, gestionar tareas y mucho más. (IA: Modelos Chinos)"},
+        {"role": "agent", "agente": "Orquestador", "content": "👋 ¡Bienvenido a BuildSmart Holdings! Soy tu asistente. (Backend: FastAPI)"},
     ]
 
 if "scheduler_activo" not in st.session_state:
     st.session_state.scheduler_activo = False
 
-# ========== SELECCIÓN AUTOMÁTICA DEL PRIMER MODELO ACTIVO ==========
-if "modelo_actual" not in st.session_state:
-    if MODELOS_DISPONIBLE and MODELOS_CHINOS:
-        # Usar el primer modelo activo disponible
-        primer_modelo = list(MODELOS_CHINOS.keys())[0]
-        st.session_state.modelo_actual = primer_modelo
-        print(f"✅ Modelo predeterminado seleccionado: {primer_modelo}")
-    else:
-        st.session_state.modelo_actual = "glm52"
-        print("⚠️ No hay modelos activos, usando fallback: glm52")
+# ========== VERIFICAR BACKEND ==========
+def verificar_backend():
+    """Verifica si el backend FastAPI está corriendo"""
+    try:
+        response = requests.get(f"{BACKEND_URL}/", timeout=5)
+        return response.status_code == 200
+    except:
+        return False
+
+BACKEND_ACTIVO = verificar_backend()
 
 # ========== DATOS DE NEGOCIOS CON TODAS LAS SECCIONES ==========
 if "negocios" not in st.session_state:
@@ -628,119 +601,21 @@ def investigar_mercado(tema):
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
-def obtener_nombre_modelo():
-    """Obtener el nombre legible del modelo actual"""
-    if MODELOS_DISPONIBLE and st.session_state.modelo_actual in MODELOS_CHINOS:
-        return MODELOS_CHINOS[st.session_state.modelo_actual]["nombre"]
-    return st.session_state.modelo_actual
-
-# ========== FUNCIÓN DE CHAT CON CORREO INTEGRADO ==========
+# ========== FUNCIÓN DE CHAT CON BACKEND FASTAPI ==========
 
 def responder_chat(mensaje):
-    """Responde usando IA real (modelos chinos gratuitos)"""
+    """Responde usando el backend FastAPI (híbrido local + nube)"""
     
     mensaje_lower = mensaje.lower()
     
-    # ========== COMANDO: CAMBIAR MODELO ==========
-    if "cambiar modelo" in mensaje_lower or "modelo" in mensaje_lower:
-        if not MODELOS_DISPONIBLE or not MODELOS_CHINOS:
-            return "❌ No hay modelos disponibles. Verifica tu conexión a OpenRouter.", "Sistema"
-        
-        # Verificar si el usuario especificó un modelo
-        for key in MODELOS_CHINOS.keys():
-            if key in mensaje_lower:
-                if not IA_DISPONIBLE or ia is None:
-                    return "❌ El módulo de IA no está disponible. Verifica utils/ia.py", "Sistema"
-                try:
-                    resultado = ia.cambiar_modelo(key)
-                    st.session_state.modelo_actual = key
-                    return resultado, "Sistema"
-                except Exception as e:
-                    return f"❌ Error al cambiar modelo: {str(e)}", "Sistema"
-        
-        # Si no especificó, mostrar los modelos disponibles
-        lista = "\n".join([f"  • `{key}`: {m['nombre']} - {m['descripcion'][:50]}..." for key, m in MODELOS_CHINOS.items()])
-        actual = obtener_nombre_modelo()
-        return f"""
-📚 **Modelos Chinos Disponibles:**
-
-{lista}
-
-**Modelo actual:** {actual}
-
-Para cambiar, escribe: `cambiar modelo glm52` (reemplaza con el nombre del modelo)
-""", "Sistema"
-    
-    # ========== COMANDO: MODELO ACTUAL ==========
-    if "modelo actual" in mensaje_lower or "que modelo" in mensaje_lower:
-        actual = obtener_nombre_modelo()
-        return f"🧠 **Modelo actual:** {actual}", "Sistema"
-    
-    # ========== COMANDO: ENVIAR CORREO DESDE EL CHAT ==========
-    if "enviar correo" in mensaje_lower or "mandar correo" in mensaje_lower:
-        
-        # Buscar destinatario (usando el mensaje original para preservar tildes y ñ)
-        email_match = re.search(r'a\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', mensaje)
-        asunto_match = re.search(r'asunto[:\s]+([^\n]+?)(?=contenido:|cuerpo:|$)', mensaje, re.IGNORECASE)
-        contenido_match = re.search(r'(?:contenido:|cuerpo:)\s*(.+?)(?=$)', mensaje, re.IGNORECASE | re.DOTALL)
-        
-        if not email_match:
-            return """
-📧 **Formato para enviar correo desde el chat:**
-
-`enviar correo a correo@ejemplo.com asunto: Tu asunto contenido: El mensaje`
-
-**Ejemplo:**
-`enviar correo a antonioempresarial9@gmail.com asunto: Hola contenido: Este es un mensaje de prueba`
-""", "Sistema"
-        
-        destino = email_match.group(1)
-        asunto = asunto_match.group(1).strip() if asunto_match else "Mensaje desde BuildSmart"
-        contenido = contenido_match.group(1).strip() if contenido_match else "Este es un correo enviado desde BuildSmart Holdings."
-        
-        if not EMAIL_DISPONIBLE:
-            return "❌ El sistema de correo no está disponible. Configura EMAIL_USER y EMAIL_PASSWORD en .env", "Sistema"
-        
-        try:
-            # Forzar que el contenido sea string UTF-8
-            contenido = str(contenido).encode('utf-8').decode('utf-8')
-            asunto = str(asunto).encode('utf-8').decode('utf-8')
-            
-            resultado = email_sender.enviar_correo(destino, asunto, contenido)
-            
-            if "✅" in resultado and st.session_state.negocio_seleccionado:
-                negocio = st.session_state.negocios[st.session_state.negocio_seleccionado]
-                negocio['correo']['enviados'] += 1
-                negocio['correo']['ultimo'] = asunto
-                negocio['timeline'].append({
-                    "accion": f"📧 Correo enviado desde chat a {destino}: {asunto}",
-                    "fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "tipo": "info"
-                })
-            
-            return f"{resultado}\n\n📨 **Detalles:**\n- Para: {destino}\n- Asunto: {asunto}", "Correo"
-            
-        except Exception as e:
-            return f"❌ Error al enviar correo: {str(e)}", "Sistema"
-
-    # ========== COMANDO: VER CORREOS ENVIADOS ==========
-    if "correos enviados" in mensaje_lower or "cuantos correos" in mensaje_lower:
-        if st.session_state.negocio_seleccionado:
-            negocio = st.session_state.negocios[st.session_state.negocio_seleccionado]
-            enviados = negocio['correo']['enviados']
-            ultimo = negocio['correo']['ultimo']
-            return f"📊 Has enviado {enviados} correo(s). Último: {ultimo if ultimo else 'Ninguno'}", "Correo"
-        else:
-            return "📊 Selecciona un negocio primero para ver sus correos.", "Correo"
-
-    # ========== COMANDOS RÁPIDOS ==========
+    # ========== COMANDOS RÁPIDOS (LOCALES) ==========
     if "credito" in mensaje_lower or "crédito" in mensaje_lower:
         if st.session_state.negocio_seleccionado:
             negocio = st.session_state.negocios[st.session_state.negocio_seleccionado]
             creditos = negocio.get("creditos", 0)
             return f"💳 En {negocio['nombre']} tienes {creditos} créditos disponibles.", "Finanzas"
         else:
-            return "💳 Selecciona un negocio primero para ver tus créditos.", "Finanzas"
+            return "💳 Selecciona un negocio primero.", "Finanzas"
     
     if "tarea" in mensaje_lower and "pendiente" in mensaje_lower:
         if st.session_state.negocio_seleccionado:
@@ -752,30 +627,24 @@ Para cambiar, escribe: `cambiar modelo glm52` (reemplaza con el nombre del model
             else:
                 return "✅ No hay tareas pendientes.", "Operaciones"
         else:
-            return "📋 Selecciona un negocio primero para ver sus tareas.", "Operaciones"
+            return "📋 Selecciona un negocio primero.", "Operaciones"
     
     if "ayuda" in mensaje_lower or "help" in mensaje_lower:
         return """
 📚 **COMANDOS DISPONIBLES:**
 
-**🧠 Modelos:**
-• `modelo` - Ver modelos disponibles
-• `cambiar modelo glm52` - Cambiar a GLM-5.2
-• `modelo actual` - Ver modelo en uso
-
 **📧 Correo:**
-• `enviar correo a correo@ejemplo.com asunto: ... contenido: ...` - Enviar correo
-• `correos enviados` - Ver cuántos correos has enviado
+• `enviar correo a correo@ejemplo.com asunto: ... contenido: ...`
+• `correos enviados`
 
 **📋 Negocios y Tareas:**
-• `¿Cuántos agentes tengo?` - Ver agentes
-• `¿Qué tareas tengo?` - Ver tareas pendientes
-• `¿Cuántos créditos tengo?` - Ver saldo
-• `¿Qué negocios tengo?` - Ver todos los negocios
+• `¿Qué tareas tengo?`
+• `¿Cuántos créditos tengo?`
+• `¿Qué negocios tengo?`
 
 **🌐 Acciones:**
-• `Generar sitio web` - Crear landing page
-• `Investigar mercado` - Realizar investigación
+• `Generar sitio web`
+• `Investigar mercado`
 """, "Orquestador"
     
     # ========== COMANDOS DE ACCIONES ==========
@@ -784,58 +653,85 @@ Para cambiar, escribe: `cambiar modelo glm52` (reemplaza con el nombre del model
             resultado, msg = generar_sitio_web(st.session_state.negocio_seleccionado)
             return msg, "Web Generator" if resultado else "Sistema"
         else:
-            return "🌐 Selecciona un negocio primero para generar su sitio web.", "Sistema"
+            return "🌐 Selecciona un negocio primero.", "Sistema"
     
     if "investigar" in mensaje_lower or "investigación" in mensaje_lower:
-        return "🔍 Para investigar un tema, usa la sección 'Investigación de Mercado' en el dashboard.", "Sistema"
+        return "🔍 Usa la sección 'Investigación de Mercado' en el dashboard.", "Sistema"
     
-    # ========== IA REAL (Modelos Chinos) ==========
-    if IA_DISPONIBLE and ia is not None:
+    if "enviar correo" in mensaje_lower or "mandar correo" in mensaje_lower:
+        email_match = re.search(r'a\s+([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', mensaje)
+        asunto_match = re.search(r'asunto[:\s]+([^\n]+?)(?=contenido:|cuerpo:|$)', mensaje, re.IGNORECASE)
+        contenido_match = re.search(r'(?:contenido:|cuerpo:)\s*(.+?)(?=$)', mensaje, re.IGNORECASE | re.DOTALL)
+        
+        if not email_match:
+            return """
+📧 **Formato para enviar correo:**
+`enviar correo a correo@ejemplo.com asunto: ... contenido: ...`
+""", "Sistema"
+        
+        destino = email_match.group(1)
+        asunto = asunto_match.group(1).strip() if asunto_match else "Mensaje desde BuildSmart"
+        contenido = contenido_match.group(1).strip() if contenido_match else "Mensaje de BuildSmart"
+        
+        if not EMAIL_DISPONIBLE:
+            return "❌ Sistema de correo no disponible.", "Sistema"
+        
         try:
-            contexto = ""
-            if st.session_state.negocio_seleccionado:
+            contenido = str(contenido).encode('utf-8').decode('utf-8')
+            asunto = str(asunto).encode('utf-8').decode('utf-8')
+            resultado = email_sender.enviar_correo(destino, asunto, contenido)
+            if "✅" in resultado and st.session_state.negocio_seleccionado:
                 negocio = st.session_state.negocios[st.session_state.negocio_seleccionado]
-                contexto = f"El usuario está hablando sobre el negocio '{negocio['nombre']}' que tiene {negocio['metricas']['Proyectos']} proyectos y {negocio['metricas']['Clientes']} clientes."
-            
-            sistema = f"""
-            Eres el asistente virtual de BuildSmart Holdings, una plataforma de creación y gestión de negocios.
-            
-            {contexto}
-            
-            Funcionalidades disponibles:
-            - Crear negocios
-            - Gestionar tareas con Kanban
-            - Sistema de créditos
-            - Generar páginas web automáticas
-            - Enviar correos
-            - Publicar en redes sociales
-            - Automatización 24/7
-            - Investigación de mercado
-            
-            Reglas:
-            1. Sé breve y directo (máximo 3 párrafos)
-            2. Da respuestas útiles y prácticas
-            3. Si no sabes algo, dilo honestamente
-            4. Ofrece sugerencias cuando sea apropiado
-            5. Responde en el mismo idioma que el usuario
-            
-            El usuario pregunta:
-            """
-            
-            respuesta = ia.chat(mensaje, sistema)
-            # Mostrar el modelo actual en la respuesta
-            modelo_nombre = obtener_nombre_modelo()
-            return f"{respuesta}\n\n---\n🧠 *Usando: {modelo_nombre}*", f"Asistente IA ({modelo_nombre})"
-            
+                negocio['correo']['enviados'] += 1
+                negocio['correo']['ultimo'] = asunto
+                negocio['timeline'].append({
+                    "accion": f"📧 Correo enviado a {destino}",
+                    "fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "tipo": "info"
+                })
+            return resultado, "Correo"
         except Exception as e:
-            return f"❌ Error con la IA: {str(e)}\n\n💡 Prueba con 'ayuda' para comandos básicos.", "Sistema"
-    else:
-        respuestas = [
-            "📝 No entendí tu pregunta. Prueba: '¿Cuántos créditos tengo?', '¿Qué tareas tengo?', o 'ayuda'.",
-            "🤔 ¿Puedes ser más específico?",
-            "💡 Escribe 'ayuda' para ver todos los comandos disponibles."
-        ]
-        return random.choice(respuestas), "Asistente"
+            return f"❌ Error: {str(e)}", "Sistema"
+    
+    if "correos enviados" in mensaje_lower or "cuantos correos" in mensaje_lower:
+        if st.session_state.negocio_seleccionado:
+            negocio = st.session_state.negocios[st.session_state.negocio_seleccionado]
+            return f"📊 Has enviado {negocio['correo']['enviados']} correos.", "Correo"
+        else:
+            return "📊 Selecciona un negocio primero.", "Correo"
+    
+    # ========== CHAT CON IA (USANDO BACKEND FASTAPI) ==========
+    if not BACKEND_ACTIVO:
+        return "❌ Backend FastAPI no está corriendo. Ejecuta: python backend/main.py", "Sistema"
+    
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/chat",
+            json={
+                "mensaje": mensaje,
+                "sistema": "Eres un asistente útil y profesional para BuildSmart Holdings.",
+                "negocio_id": st.session_state.negocio_seleccionado
+            },
+            timeout=90
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            respuesta = data.get("respuesta", "No se recibió respuesta")
+            fuente = data.get("fuente", "desconocida")
+            modelo = data.get("modelo_usado", "desconocido")
+            
+            icono = "🧠" if fuente == "local" else "☁️"
+            return f"{respuesta}\n\n---\n{icono} *Usando: {fuente} ({modelo})*", f"Asistente ({fuente})"
+        else:
+            return f"❌ Error del backend: {response.status_code}", "Sistema"
+            
+    except requests.exceptions.ConnectionError:
+        return "❌ Error: Backend FastAPI no está corriendo. Ejecuta: python backend/main.py", "Sistema"
+    except requests.exceptions.Timeout:
+        return "❌ Error: Tiempo de espera agotado.", "Sistema"
+    except Exception as e:
+        return f"❌ Error: {str(e)}", "Sistema"
 
 # ========== ENCABEZADO ==========
 st.markdown(f"""
@@ -845,7 +741,7 @@ st.markdown(f"""
             <h1 style="margin: 0;">🏗️ BuildSmart Holdings</h1>
             <p style="margin: 0; opacity: 0.8;">
                 Panel de Control Multi-Negocio 
-                {'🤖 (IA Activada)' if IA_DISPONIBLE else ''}
+                {'✅ (Backend Activo)' if BACKEND_ACTIVO else '⚠️ (Backend Inactivo)'}
                 {'🌐' if WEB_DISPONIBLE else ''}
                 {'📧' if EMAIL_DISPONIBLE else ''}
                 {'🐦' if SOCIAL_DISPONIBLE else ''}
@@ -856,7 +752,6 @@ st.markdown(f"""
         <div>
             <span class="status-active">✅ SISTEMA ACTIVO</span>
             <span style="margin-left: 1rem;">🔄 {datetime.datetime.now().strftime("%H:%M")}</span>
-            <span style="margin-left: 1rem;" class="modelo-actual">🧠 {obtener_nombre_modelo()}</span>
         </div>
     </div>
 </div>
@@ -870,11 +765,19 @@ with st.sidebar:
     st.success("✅ Sistema Operativo")
     st.caption(f"🔄 {datetime.datetime.now().strftime('%H:%M:%S')}")
     
+    # Estado del backend
+    if BACKEND_ACTIVO:
+        st.info("🧠 Backend: Activo (FastAPI)")
+    else:
+        st.warning("⚠️ Backend: Inactivo (Ejecuta: python backend/main.py)")
+    
+    st.divider()
+    
     # Estado de módulos
     st.markdown("**🧩 Módulos:**")
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown(f"🧠 IA: {'✅' if IA_DISPONIBLE else '❌'}")
+        st.markdown(f"🧠 Backend: {'✅' if BACKEND_ACTIVO else '❌'}")
         st.markdown(f"🌐 Web: {'✅' if WEB_DISPONIBLE else '❌'}")
         st.markdown(f"📧 Email: {'✅' if EMAIL_DISPONIBLE else '❌'}")
     with col2:
@@ -926,7 +829,7 @@ with st.sidebar:
             st.rerun()
     
     st.divider()
-    st.caption("v3.0 · Todas las funciones")
+    st.caption("v3.0 · Backend FastAPI")
 
 # ========== SELECCIÓN DE NEGOCIO ==========
 st.subheader("📋 Tus Negocios")
@@ -1326,7 +1229,7 @@ with st.form(key="chat_form", clear_on_submit=True):
         mensaje = st.text_input(
             "Pregunta a BuildSmart lo que quieras...",
             key="chat_input",
-            placeholder="Ej: ¿Cuántas tareas tengo? o cambiar modelo glm52",
+            placeholder="Ej: ¿Cuántas tareas tengo? o enviar correo a...",
             label_visibility="collapsed"
         )
     with col2:
@@ -1361,7 +1264,7 @@ if st.session_state.chat_historial:
 
 if st.button("🗑️ Limpiar chat", use_container_width=False):
     st.session_state.chat_historial = [
-        {"role": "agent", "agente": "Orquestador", "content": "👋 ¡Bienvenido a BuildSmart Holdings! Soy tu asistente. (IA: Modelos Chinos)"}
+        {"role": "agent", "agente": "Orquestador", "content": "👋 ¡Bienvenido a BuildSmart Holdings! Soy tu asistente. (Backend: FastAPI)"}
     ]
     st.rerun()
 
@@ -1374,13 +1277,12 @@ st.markdown(f"""
     Negocios: {len(st.session_state.negocios)} | 
     Agentes: {total_agentes} | 
     Créditos: {total_creditos} 💳 |
-    IA: {'✅' if IA_DISPONIBLE else '❌'} |
+    Backend: {'✅ Activo' if BACKEND_ACTIVO else '❌ Inactivo'} |
     Web: {'✅' if WEB_DISPONIBLE else '❌'} |
     Email: {'✅' if EMAIL_DISPONIBLE else '❌'} |
     Social: {'✅' if SOCIAL_DISPONIBLE else '❌'} |
     Auto: {'✅' if AUTOMATION_DISPONIBLE else '❌'} |
     Research: {'✅' if RESEARCH_DISPONIBLE else '❌'} |
-    Modelo: {obtener_nombre_modelo()} |
     Última actualización: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
 </div>
 """, unsafe_allow_html=True)
