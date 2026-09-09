@@ -1,5 +1,5 @@
 # app.py - BuildSmart Operations Center
-# VERSIÓN CON BACKEND FASTAPI (Híbrido Local + Nube)
+# BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:8000') 
 
 import streamlit as st
 import datetime
@@ -712,7 +712,7 @@ def responder_chat(mensaje):
                 "sistema": "Eres un asistente útil y profesional para BuildSmart Holdings.",
                 "negocio_id": st.session_state.negocio_seleccionado
             },
-            timeout=90
+            timeout=180
         )
         
         if response.status_code == 200:
