@@ -1,10 +1,10 @@
-# backend/gateway.py - VERSIÓN 7.6 - OPTIMIZADO
+# backend/gateway.py - VERSION 8.2
 # ============================================
-# CORRECCIONES:
-# - Backoff aumentado a 3s para Rate Limit (429)
-# - 1 solo intento por modelo (más rápido)
-# - Prioridad: OpenRouter → Groq → Gemini → Ollama
-# - DeepSeek desactivado
+# MEJORAS v8.2:
+# - Groq: modelos actualizados (gpt-oss-120b, gpt-oss-20b)
+#   * Antes usaba qwen3.6-27b (404) y qwen3.8-27b (rate limited)
+# - Gemini: modelos actualizados (gemini-2.0-flash-exp + 1.5-flash)
+# - Sin mojibake en comentarios
 # ============================================
 
 import os
@@ -15,34 +15,46 @@ from typing import Tuple, Optional
 
 load_dotenv()
 
+
 # ============================================
 # MODELOS VERIFICADOS
 # ============================================
 
 MODELOS_OPENROUTER = [
-    "nvidia/nemotron-3-super-120b-a12b:free",  # ✅ 1M contexto
-    "meta-llama/llama-3.2-3b-instruct:free",   # ✅ Rápido
+    "nvidia/nemotron-3-super-120b-a12b:free",     # Verificado funcionando
+    "deepseek/deepseek-chat-v3.1:free",           # Potente para codigo
+    "meta-llama/llama-3.3-70b-instruct:free",     # Excelente HTML
+    "qwen/qwen-2.5-72b-instruct:free",            # Buen respaldo
 ]
 
+# MODELOS GROQ - ACTUALIZADOS V8.2
+# Los GPT-OSS son los mas potentes y estan disponibles
 MODELOS_GROQ = [
-    "qwen/qwen3.6-27b",  # ✅ Principal
-    "qwen/qwen3.8-27b",  # ✅ Alternativa
+    "openai/gpt-oss-120b",       # Principal - potente
+    "openai/gpt-oss-20b",        # Fallback - rapido
+    "qwen/qwen3.8-27b",          # Ultimo recurso
 ]
 
+# MODELOS GEMINI - ACTUALIZADOS V8.2
 MODELOS_GEMINI = [
-    "gemini-3.1-flash-lite",  # ✅ Multimodal
+    "gemini-2.0-flash-exp",      # Multimodal, rapido
+    "gemini-1.5-flash",          # Fallback estable
 ]
+
+# Timeout global para todas las APIs
+TIMEOUT_API = 300  # 5 minutos
+
 
 # ============================================
-# 1. OPENROUTER - PRIORIDAD 1
+# 1. OPENROUTER
 # ============================================
 
 def chat_openrouter(mensaje: str, sistema: str) -> Optional[str]:
-    """Chat con OpenRouter - Contexto largo, menos límites"""
+    """Chat con OpenRouter - Contexto largo"""
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         raise Exception("OPENROUTER_API_KEY no configurada")
-    
+
     for modelo in MODELOS_OPENROUTER:
         try:
             print(f"   Intentando OpenRouter: {modelo}")
@@ -60,37 +72,38 @@ def chat_openrouter(mensaje: str, sistema: str) -> Optional[str]:
                             {"role": "user", "content": mensaje}
                         ],
                         "temperature": 0.7,
-                        "max_tokens": 1500
+                        "max_tokens": 8000
                     },
-                    timeout=30
+                    timeout=TIMEOUT_API
                 )
-                
+
                 if response.status_code == 200:
-                    print(f"   ✅ OpenRouter OK: {modelo}")
+                    print(f"   [OK] OpenRouter: {modelo}")
                     return response.json()['choices'][0]['message']['content']
                 elif response.status_code == 429:
-                    print(f"   ⏳ Rate Limit, esperando 3s...")
+                    print(f"   [WAIT] Rate Limit, esperando 3s...")
                     time.sleep(3)
                     continue
                 else:
-                    print(f"   ❌ OpenRouter error: {response.status_code}")
+                    print(f"   [FAIL] OpenRouter error: {response.status_code}")
                     continue
         except Exception as e:
-            print(f"   ❌ OpenRouter exception: {str(e)[:50]}...")
+            print(f"   [FAIL] OpenRouter exception: {str(e)[:50]}")
             continue
-    
-    raise Exception("Ningún modelo de OpenRouter disponible")
+
+    raise Exception("Ningun modelo de OpenRouter disponible")
+
 
 # ============================================
-# 2. GROQ - PRIORIDAD 2
+# 2. GROQ
 # ============================================
 
 def chat_groq_directo(mensaje: str, sistema: str) -> Optional[str]:
-    """Chat con Groq - Rápido pero con Rate Limit"""
+    """Chat con Groq - Rapido"""
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise Exception("GROQ_API_KEY no configurada")
-    
+
     for modelo in MODELOS_GROQ:
         try:
             print(f"   Intentando Groq: {modelo}")
@@ -108,29 +121,30 @@ def chat_groq_directo(mensaje: str, sistema: str) -> Optional[str]:
                             {"role": "user", "content": mensaje}
                         ],
                         "temperature": 0.7,
-                        "max_tokens": 1500
+                        "max_tokens": 8000
                     },
-                    timeout=30
+                    timeout=TIMEOUT_API
                 )
-                
+
                 if response.status_code == 200:
-                    print(f"   ✅ Groq OK: {modelo}")
+                    print(f"   [OK] Groq: {modelo}")
                     return response.json()['choices'][0]['message']['content']
                 elif response.status_code == 429:
-                    print(f"   ⏳ Rate Limit (429), esperando 3s...")
+                    print(f"   [WAIT] Rate Limit (429), esperando 3s...")
                     time.sleep(3)
                     continue
                 else:
-                    print(f"   ❌ Groq error: {response.status_code}")
+                    print(f"   [FAIL] Groq error: {response.status_code}")
                     continue
         except Exception as e:
-            print(f"   ❌ Groq exception: {str(e)[:50]}...")
+            print(f"   [FAIL] Groq exception: {str(e)[:50]}")
             continue
-    
-    raise Exception("Ningún modelo de Groq disponible")
+
+    raise Exception("Ningun modelo de Groq disponible")
+
 
 # ============================================
-# 3. GEMINI - PRIORIDAD 3
+# 3. GEMINI
 # ============================================
 
 def chat_gemini_directo(mensaje: str, sistema: str) -> Optional[str]:
@@ -138,13 +152,13 @@ def chat_gemini_directo(mensaje: str, sistema: str) -> Optional[str]:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise Exception("GEMINI_API_KEY no configurada")
-    
+
     for modelo in MODELOS_GEMINI:
         try:
             print(f"   Intentando Gemini: {modelo}")
             url = f'https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}'
             prompt_completo = f"{sistema}\n\nUsuario: {mensaje}"
-            
+
             payload = {
                 'contents': [
                     {
@@ -154,39 +168,40 @@ def chat_gemini_directo(mensaje: str, sistema: str) -> Optional[str]:
                 ],
                 'generationConfig': {
                     'temperature': 0.7,
-                    'maxOutputTokens': 1500,
+                    'maxOutputTokens': 8000,
                     'topP': 0.95,
                     'topK': 40
                 }
             }
-            
-            response = requests.post(url, json=payload, timeout=30)
-            
+
+            response = requests.post(url, json=payload, timeout=TIMEOUT_API)
+
             if response.status_code == 200:
                 result = response.json()
                 text = result['candidates'][0]['content']['parts'][0]['text']
-                print(f"   ✅ Gemini OK: {modelo}")
+                print(f"   [OK] Gemini: {modelo}")
                 return text
             elif response.status_code == 503:
-                print(f"   ⏳ Servicio ocupado (503), esperando 3s...")
+                print(f"   [WAIT] Servicio ocupado (503), esperando 3s...")
                 time.sleep(3)
                 continue
             else:
-                print(f"   ❌ Gemini error: {response.status_code}")
+                print(f"   [FAIL] Gemini error: {response.status_code}")
                 continue
-                
+
         except Exception as e:
-            print(f"   ❌ Gemini exception: {str(e)[:50]}...")
+            print(f"   [FAIL] Gemini exception: {str(e)[:50]}")
             continue
-    
-    raise Exception("Ningún modelo de Gemini disponible")
+
+    raise Exception("Ningun modelo de Gemini disponible")
+
 
 # ============================================
-# 4. OLLAMA - LOCAL (RESPALDO)
+# 4. OLLAMA (RESPALDO)
 # ============================================
 
 def chat_ollama(mensaje: str, sistema: str) -> Optional[str]:
-    """Chat con Ollama - Local (último recurso)"""
+    """Chat con Ollama - Local (ultimo recurso)"""
     try:
         print("   Intentando Ollama (local)...")
         with requests.Session() as session:
@@ -196,74 +211,133 @@ def chat_ollama(mensaje: str, sistema: str) -> Optional[str]:
                     "model": "qwen2.5:3b",
                     "prompt": f"{sistema}\n\nUsuario: {mensaje}\n\nAsistente:",
                     "stream": False,
-                    "temperature": 0.7,
-                    "max_tokens": 1500
+                    "temperature": 0.7
                 },
-                timeout=120
+                timeout=300
             )
-            
+
             if response.status_code == 200:
-                print("   ✅ Ollama OK")
+                print("   [OK] Ollama")
                 return response.json().get('response', '')
             else:
                 raise Exception(f"Ollama error: {response.status_code}")
     except Exception as e:
         raise Exception(f"Ollama exception: {str(e)}")
 
+
 # ============================================
-# 5. ENRUTADOR PRINCIPAL - NUEVO ORDEN
+# 5. CHAT RAPIDO (SALUDOS)
 # ============================================
 
-def chat_gateway(mensaje: str, sistema: str = "Eres un asistente útil.") -> Tuple[str, str]:
-    """
-    NUEVO ORDEN DE PRIORIDAD (OPTIMIZADO):
-    1. OpenRouter (contexto largo, menos Rate Limit)
-    2. Groq (rápido)
-    3. Gemini (multimodal)
-    4. Ollama (local)
-    """
-    
-    # ============================================
-    # PRIORIDAD 1: OPENROUTER
-    # ============================================
+def chat_rapido(mensaje: str, sistema: str = "Eres un asistente amigable.") -> Tuple[str, str]:
+    """Chat rapido para saludos y mensajes simples."""
+    # 1. Groq (mas rapido)
     try:
-        print("🔍 Probando: OpenRouter")
-        respuesta = chat_openrouter(mensaje, sistema)
-        return respuesta, "openrouter"
-    except Exception as e:
-        print(f"⚠️ OpenRouter: {str(e)[:50]}...")
-    
-    # ============================================
-    # PRIORIDAD 2: GROQ
-    # ============================================
-    try:
-        print("🔍 Probando: Groq")
+        print("[FAST] Chat rapido: Intentando Groq...")
         respuesta = chat_groq_directo(mensaje, sistema)
         return respuesta, "groq"
     except Exception as e:
-        print(f"⚠️ Groq: {str(e)[:50]}...")
-    
-    # ============================================
-    # PRIORIDAD 3: GEMINI
-    # ============================================
+        print(f"[WARN] Groq fallo: {str(e)[:50]}")
+
+    # 2. OpenRouter
     try:
-        print("🔍 Probando: Gemini")
+        print("[FAST] Chat rapido: Intentando OpenRouter...")
+        respuesta = chat_openrouter(mensaje, sistema)
+        return respuesta, "openrouter"
+    except Exception as e:
+        print(f"[WARN] OpenRouter fallo: {str(e)[:50]}")
+
+    # 3. Gemini
+    try:
+        print("[FAST] Chat rapido: Intentando Gemini...")
         respuesta = chat_gemini_directo(mensaje, sistema)
         return respuesta, "gemini"
     except Exception as e:
-        print(f"⚠️ Gemini: {str(e)[:50]}...")
-    
-    # ============================================
-    # PRIORIDAD 4: OLLAMA (LOCAL)
-    # ============================================
+        print(f"[WARN] Gemini fallo: {str(e)[:50]}")
+
+    return "Hola! En que puedo ayudarte?", "ninguno"
+
+
+# ============================================
+# 6. CHAT INTELIGENTE (TAREAS) - V8.2
+# ============================================
+
+def chat_inteligente(mensaje: str, sistema: str = "Eres un asistente util.") -> Tuple[str, str]:
+    """
+    Chat para tareas complejas.
+    Prioriza Groq (mas rapido) -> OpenRouter -> Gemini -> Ollama.
+    """
+    # 1. Groq (mas rapido, 5-15 seg)
     try:
-        print("🔍 Probando: Ollama (local)")
+        print("[IA] Chat inteligente: Intentando Groq...")
+        respuesta = chat_groq_directo(mensaje, sistema)
+        return respuesta, "groq"
+    except Exception as e:
+        print(f"[WARN] Groq fallo: {str(e)[:50]}")
+
+    # 2. OpenRouter (contexto largo, 60-120 seg)
+    try:
+        print("[IA] Chat inteligente: Intentando OpenRouter...")
+        respuesta = chat_openrouter(mensaje, sistema)
+        return respuesta, "openrouter"
+    except Exception as e:
+        print(f"[WARN] OpenRouter fallo: {str(e)[:50]}")
+
+    # 3. Gemini
+    try:
+        print("[IA] Chat inteligente: Intentando Gemini...")
+        respuesta = chat_gemini_directo(mensaje, sistema)
+        return respuesta, "gemini"
+    except Exception as e:
+        print(f"[WARN] Gemini fallo: {str(e)[:50]}")
+
+    # 4. Ollama (local)
+    try:
+        print("[IA] Chat inteligente: Intentando Ollama...")
         respuesta = chat_ollama(mensaje, sistema)
         return respuesta, "ollama"
     except Exception as e:
-        print(f"⚠️ Ollama: {str(e)[:50]}...")
-    
-    return "⚠️ No hay modelos disponibles.", "ninguno"
+        print(f"[WARN] Ollama fallo: {str(e)[:50]}")
+
+    return "[ERROR] No hay modelos disponibles.", "ninguno"
+
+
+# ============================================
+# 7. CHAT GATEWAY (GENERAL)
+# ============================================
+
+def chat_gateway(mensaje: str, sistema: str = "Eres un asistente util.") -> Tuple[str, str]:
+    """Enrutamiento general."""
+    try:
+        print("[TRY] Probando: Groq")
+        respuesta = chat_groq_directo(mensaje, sistema)
+        return respuesta, "groq"
+    except Exception as e:
+        print(f"[WARN] Groq: {str(e)[:50]}")
+
+    try:
+        print("[TRY] Probando: OpenRouter")
+        respuesta = chat_openrouter(mensaje, sistema)
+        return respuesta, "openrouter"
+    except Exception as e:
+        print(f"[WARN] OpenRouter: {str(e)[:50]}")
+
+    try:
+        print("[TRY] Probando: Gemini")
+        respuesta = chat_gemini_directo(mensaje, sistema)
+        return respuesta, "gemini"
+    except Exception as e:
+        print(f"[WARN] Gemini: {str(e)[:50]}")
+
+    try:
+        print("[TRY] Probando: Ollama (local)")
+        respuesta = chat_ollama(mensaje, sistema)
+        return respuesta, "ollama"
+    except Exception as e:
+        print(f"[WARN] Ollama: {str(e)[:50]}")
+
+    return "[ERROR] No hay modelos disponibles.", "ninguno"
+
 
 # ============================================
 # FUNCIONES ADICIONALES
@@ -273,10 +347,11 @@ def generar_imagen_gemini(prompt: str) -> str:
     """Genera una imagen usando Gemini"""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        return "❌ GEMINI_API_KEY no configurada"
-    
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:generateContent?key={api_key}"
-    
+        return "[ERROR] GEMINI_API_KEY no configurada"
+
+    # Modelos de imagen de Gemini
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={api_key}"
+
     payload = {
         "contents": [
             {"parts": [{"text": prompt}]}
@@ -286,9 +361,9 @@ def generar_imagen_gemini(prompt: str) -> str:
             "candidateCount": 1
         }
     }
-    
+
     try:
-        response = requests.post(url, json=payload, timeout=60)
+        response = requests.post(url, json=payload, timeout=180)
         if response.status_code == 200:
             data = response.json()
             parts = data['candidates'][0]['content']['parts']
@@ -301,16 +376,17 @@ def generar_imagen_gemini(prompt: str) -> str:
                     with open(ruta, 'wb') as f:
                         f.write(base64.b64decode(image_data))
                     return ruta
-        return f"❌ Error: {response.status_code}"
+        return f"[ERROR] {response.status_code}"
     except Exception as e:
-        return f"❌ Error: {str(e)}"
+        return f"[ERROR] {str(e)}"
+
 
 def generar_video_kling(prompt: str, duracion: int = 5, resolucion: str = "720p") -> dict:
     """Genera un video usando Kling AI"""
     api_key = os.getenv("KLING_API_KEY")
     if not api_key:
         return {"error": "KLING_API_KEY no configurada"}
-    
+
     url = "https://api.klingai.com/v1/videos/generations"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -322,9 +398,9 @@ def generar_video_kling(prompt: str, duracion: int = 5, resolucion: str = "720p"
         "duration": duracion,
         "resolution": resolucion
     }
-    
+
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        response = requests.post(url, headers=headers, json=payload, timeout=120)
         if response.status_code == 200:
             data = response.json()
             return {
@@ -337,17 +413,18 @@ def generar_video_kling(prompt: str, duracion: int = 5, resolucion: str = "720p"
     except Exception as e:
         return {"error": str(e)}
 
+
 def consultar_video_kling(task_id: str) -> dict:
     """Consulta el estado de un video en Kling AI"""
     api_key = os.getenv("KLING_API_KEY")
     if not api_key:
         return {"error": "KLING_API_KEY no configurada"}
-    
+
     url = f"https://api.klingai.com/v1/videos/generations/{task_id}"
     headers = {"Authorization": f"Bearer {api_key}"}
-    
+
     try:
-        response = requests.get(url, headers=headers, timeout=30)
+        response = requests.get(url, headers=headers, timeout=60)
         if response.status_code == 200:
             data = response.json()
             return {
@@ -359,6 +436,7 @@ def consultar_video_kling(task_id: str) -> dict:
     except Exception as e:
         return {"error": str(e)}
 
+
 # ============================================
 # INSTANCIA GLOBAL
 # ============================================
@@ -366,14 +444,15 @@ def consultar_video_kling(task_id: str) -> dict:
 class Gateway:
     def __init__(self):
         self.chat = chat_gateway
+        self.chat_rapido = chat_rapido
+        self.chat_inteligente = chat_inteligente
         self.generar_imagen = generar_imagen_gemini
         self.generar_video = generar_video_kling
         self.consultar_video = consultar_video_kling
-    
-    def chat(self, mensaje: str, sistema: str = "Eres un asistente útil.") -> Tuple[str, str]:
-        return chat_gateway(mensaje, sistema)
+
 
 gateway = Gateway()
+
 
 # ============================================
 # PRUEBA
@@ -381,15 +460,16 @@ gateway = Gateway()
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("🧪 PROBANDO GATEWAY - VERSIÓN 7.6")
+    print("PROBANDO GATEWAY - VERSION 8.2")
     print("=" * 60)
-    print("\n✅ ORDEN DE PRIORIDAD:")
-    print("   1. OpenRouter (contexto largo, menos límites)")
-    print("   2. Groq (rápido)")
-    print("   3. Gemini (multimodal)")
-    print("   4. Ollama (local)")
-    print("\n" + "=" * 60 + "\n")
-    
-    respuesta, fuente = chat_gateway("Hola, ¿cómo estás?")
-    print(f"\n📌 Fuente final: {fuente}")
-    print(f"💬 Respuesta: {respuesta[:200]}...")
+
+    print("\n[TEST 1] Chat rapido (Groq)")
+    respuesta, fuente = chat_rapido("Hola, como estas?")
+    print(f"Fuente: {fuente}")
+    print(f"Respuesta: {respuesta[:150]}...")
+
+    print("\n" + "=" * 60)
+    print("\n[TEST 2] Chat inteligente (Groq primero)")
+    respuesta, fuente = chat_inteligente("Necesito un plan de marketing")
+    print(f"Fuente: {fuente}")
+    print(f"Respuesta: {respuesta[:150]}...")

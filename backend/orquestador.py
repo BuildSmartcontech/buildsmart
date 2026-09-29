@@ -1,18 +1,11 @@
-# backend/orquestador.py - VERSIÓN 7.8 - CON PDF Y RESUMEN EJECUTIVO
-# ============================================
-# CORRECCIONES:
-# - Delay de 0.5s entre nodos
-# - Timeout por nodo de 30s
-# - Manejo de errores mejorado
-# - Integración con Supabase para guardar historial
-# - Generación de PDF del plan
-# - Resumen ejecutivo
+# backend/orquestador.py - VERSIÓN 8.0 - CON DETECCIÓN DE INTENCIÓN
 # ============================================
 
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, Optional
 from backend.gateway import gateway
 import time
+import re
 import os
 
 # ========== ESTADO ==========
@@ -24,23 +17,111 @@ class Estado(TypedDict):
     historial: list
     negocio_id: Optional[str]
 
+# ============================================
+# FUNCIÓN: LIMPIAR RESPUESTA
+# ============================================
+
+def limpiar_respuesta(respuesta: str) -> str:
+    """Elimina la cadena de pensamiento (<think>...</think>)"""
+    if not respuesta:
+        return respuesta
+    respuesta = re.sub(r'<think>.*?</think>', '', respuesta, flags=re.DOTALL)
+    respuesta = re.sub(r'<piensa>.*?</piensa>', '', respuesta, flags=re.DOTALL)
+    respuesta = respuesta.replace('<think>', '').replace('</think>', '')
+    respuesta = respuesta.replace('<piensa>', '').replace('</piensa>', '')
+    respuesta = respuesta.strip()
+    return respuesta
+
+# ============================================
+# DETECCIÓN DE INTENCIÓN
+# ============================================
+
+def es_mensaje_simple(mensaje: str) -> bool:
+    """Detecta saludos o mensajes simples para camino rápido"""
+    mensaje_lower = mensaje.lower().strip()
+    palabras = mensaje_lower.split()
+    
+    # Saludos
+    saludos = ['hola', 'buenos días', 'buenas tardes', 'buenas noches',
+               'hey', 'qué tal', 'cómo estás', 'como estas', 'hi', 'hello',
+               'buenas', 'saludos', 'qué hay', 'que hay']
+    
+    if len(palabras) <= 4:
+        for saludo in saludos:
+            if saludo in mensaje_lower:
+                return True
+    
+    # Preguntas simples sin tarea
+    palabras_tarea = ['plan', 'marketing', 'estrategia', 'buscar', 'investigar',
+                      'crear', 'generar', 'analizar', 'desarrollar', 'diseñar',
+                      'campaña', 'proyecto', 'negocio', 'empresa', 'video', 'imagen']
+    
+    if len(palabras) <= 6:
+        tiene_tarea = any(p in mensaje_lower for p in palabras_tarea)
+        if not tiene_tarea:
+            return True
+    
+    return False
+
+# ============================================
+# CAMINO RÁPIDO (SALUDOS)
+# ============================================
+
+def ejecutar_camino_rapido(mensaje: str, negocio_id: str = None) -> dict:
+    """Camino rápido: 1 llamada a Groq (1-2s)"""
+    print("⚡ CAMINO RÁPIDO: Saludo simple detectado")
+    print("-" * 60)
+    
+    try:
+        sistema = """Eres un asistente amigable de SAMU IA.
+        Responde de forma breve, cálida y profesional.
+        NO generes planes ni listas. Solo responde al saludo.
+        Máximo 2 frases."""
+        
+        respuesta, fuente = gateway.chat_rapido(mensaje, sistema)
+        respuesta = limpiar_respuesta(respuesta)
+        
+        print(f"✅ Respuesta rápida con: {fuente}")
+        
+        try:
+            from utils.supabase_client import supabase
+            supabase.guardar_historial(
+                mensaje=mensaje, respuesta=respuesta,
+                modelo=fuente, negocio_id=negocio_id, fuente=fuente
+            )
+        except:
+            pass
+        
+        return {
+            "mensaje": mensaje, "plan": "", "resultado": respuesta,
+            "resumen_ejecutivo": None, "pdf_url": None,
+            "paso_actual": "fast_path",
+            "historial": [{"nodo": "fast_path", "respuesta": respuesta}]
+        }
+    except Exception as e:
+        print(f"❌ Error en camino rápido: {e}")
+        return {
+            "mensaje": mensaje, "plan": "", "resultado": f"⚠️ Error: {str(e)}",
+            "resumen_ejecutivo": None, "pdf_url": None,
+            "paso_actual": "error", "historial": []
+        }
+
 # ========== NODOS ==========
 
 def nodo_brainstorm(estado: Estado) -> Estado:
-    """Nodo 1: Genera ideas y estrategias"""
+    """Nodo 1: Genera ideas"""
     try:
         print("🧠 Brainstorm - Generando ideas...")
-        time.sleep(0.5)
+        time.sleep(0.3)
         
-        sistema = """Eres un experto en estrategia de negocios y creatividad."""
+        sistema = "Eres un experto en estrategia de negocios. Responde de forma clara y directa."
         prompt = f"Solicitud: {estado['mensaje']}\n\nGenera un plan de acción paso a paso."
         
-        respuesta, fuente = gateway.chat(prompt, sistema)
-        estado["plan"] = respuesta
+        respuesta, fuente = gateway.chat_inteligente(prompt, sistema)
+        estado["plan"] = limpiar_respuesta(respuesta)
         print(f"✅ Brainstorm completado con: {fuente}")
-        
     except Exception as e:
-        estado["plan"] = f"⚠️ Error en brainstorm: {str(e)}"
+        estado["plan"] = f"⚠️ Error: {str(e)}"
         print(f"❌ Error en brainstorm: {e}")
     
     estado["paso_actual"] = "plan"
@@ -48,20 +129,19 @@ def nodo_brainstorm(estado: Estado) -> Estado:
     return estado
 
 def nodo_plan(estado: Estado) -> Estado:
-    """Nodo 2: Convierte ideas en plan estructurado"""
+    """Nodo 2: Convierte ideas en plan"""
     try:
-        print("📋 Plan - Estructurando el plan...")
-        time.sleep(0.5)
+        print("📋 Plan - Estructurando...")
+        time.sleep(0.3)
         
-        sistema = "Eres un planificador de proyectos experto."
-        prompt = f"Ideas: {estado['plan']}\n\nConvierte esto en un plan de acción detallado."
+        sistema = "Eres un planificador de proyectos experto. Responde de forma clara y directa."
+        prompt = f"Ideas: {estado['plan']}\n\nConvierte esto en un plan detallado."
         
-        respuesta, fuente = gateway.chat(prompt, sistema)
-        estado["resultado"] = respuesta
+        respuesta, fuente = gateway.chat_inteligente(prompt, sistema)
+        estado["resultado"] = limpiar_respuesta(respuesta)
         print(f"✅ Plan completado con: {fuente}")
-        
     except Exception as e:
-        estado["resultado"] = f"⚠️ Error en plan: {str(e)}"
+        estado["resultado"] = f"⚠️ Error: {str(e)}"
         print(f"❌ Error en plan: {e}")
     
     estado["paso_actual"] = "work"
@@ -69,33 +149,28 @@ def nodo_plan(estado: Estado) -> Estado:
     return estado
 
 def nodo_work(estado: Estado) -> Estado:
-    """Nodo 3: Ejecuta tareas usando herramientas"""
+    """Nodo 3: Ejecuta tareas"""
     try:
         from backend.herramientas import herramientas
-        
-        print("⚡ Work - Ejecutando tareas...")
-        time.sleep(0.5)
+        print("⚡ Work - Ejecutando...")
+        time.sleep(0.3)
         
         mensaje = estado["mensaje"]
         
-        # BÚSQUEDA
         if any(word in mensaje.lower() for word in ['buscar', 'investigar', 'busca', 'noticias']):
-            print("   🔍 Detected: Búsqueda en DuckDuckGo")
+            print("   🔍 Búsqueda detectada")
             busqueda = herramientas.buscar(mensaje)
-            estado["resultado"] = f"🔍 Resultados de búsqueda:\n\n{busqueda}"
-        
-        # PROCESAMIENTO GENERAL
+            estado["resultado"] = f"🔍 Resultados:\n\n{limpiar_respuesta(busqueda)}"
         else:
-            print("   📝 Detected: Procesamiento general")
-            sistema = "Eres un ejecutor experto."
+            print("   📝 Procesamiento general")
+            sistema = "Eres un ejecutor experto. Responde de forma clara y directa."
             prompt = f"Responde a: {mensaje}"
-            respuesta, fuente = gateway.chat(prompt, sistema)
-            estado["resultado"] = respuesta
+            respuesta, fuente = gateway.chat_inteligente(prompt, sistema)
+            estado["resultado"] = limpiar_respuesta(respuesta)
         
         print("✅ Work completado")
-        
     except Exception as e:
-        estado["resultado"] = f"⚠️ Error en work: {str(e)}"
+        estado["resultado"] = f"⚠️ Error: {str(e)}"
         print(f"❌ Error en work: {e}")
     
     estado["paso_actual"] = "review"
@@ -103,40 +178,38 @@ def nodo_work(estado: Estado) -> Estado:
     return estado
 
 def nodo_review(estado: Estado) -> Estado:
-    """Nodo 4: Revisa y mejora el resultado"""
+    """Nodo 4: Revisa"""
     try:
-        print("🔍 Review - Evaluando resultado...")
-        time.sleep(0.5)
+        print("🔍 Review - Evaluando...")
+        time.sleep(0.3)
         
-        sistema = "Eres un crítico constructivo y editor experto."
-        prompt = f"Revisa y mejora este resultado:\n{estado.get('resultado', '')}"
+        sistema = "Eres un editor experto. Responde de forma clara y directa."
+        prompt = f"Revisa y mejora:\n{estado.get('resultado', '')}"
         
-        respuesta, fuente = gateway.chat(prompt, sistema)
-        estado["resultado"] = respuesta
+        respuesta, fuente = gateway.chat_inteligente(prompt, sistema)
+        estado["resultado"] = limpiar_respuesta(respuesta)
         print(f"✅ Review completado con: {fuente}")
-        
     except Exception as e:
-        print(f"⚠️ Review falló, usando resultado original: {e}")
+        print(f"⚠️ Review falló: {e}")
     
     estado["paso_actual"] = "compound"
     estado["historial"] = estado.get("historial", []) + [{"nodo": "review", "respuesta": estado["resultado"]}]
     return estado
 
 def nodo_compound(estado: Estado) -> Estado:
-    """Nodo 5: Sintetiza la respuesta final"""
+    """Nodo 5: Sintetiza"""
     try:
-        print("📊 Compound - Sintetizando respuesta final...")
-        time.sleep(0.5)
+        print("📊 Compound - Sintetizando...")
+        time.sleep(0.3)
         
-        sistema = "Eres un comunicador experto."
-        prompt = f"Sintetiza esta información:\nPlan: {estado.get('plan', '')}\n\nResultado: {estado.get('resultado', '')}"
+        sistema = "Eres un comunicador experto. Responde de forma clara y concisa."
+        prompt = f"Sintetiza:\nPlan: {estado.get('plan', '')}\n\nResultado: {estado.get('resultado', '')}"
         
-        respuesta, fuente = gateway.chat(prompt, sistema)
-        estado["resultado"] = respuesta
+        respuesta, fuente = gateway.chat_inteligente(prompt, sistema)
+        estado["resultado"] = limpiar_respuesta(respuesta)
         print(f"✅ Compound completado con: {fuente}")
-        
     except Exception as e:
-        estado["resultado"] = f"⚠️ Error en compound: {str(e)}"
+        estado["resultado"] = f"⚠️ Error: {str(e)}"
         print(f"❌ Error en compound: {e}")
     
     estado["paso_actual"] = "finish"
@@ -147,7 +220,6 @@ def nodo_compound(estado: Estado) -> Estado:
 
 def crear_orquestador():
     graph = StateGraph(Estado)
-    
     graph.add_node("brainstorm", nodo_brainstorm)
     graph.add_node("plan", nodo_plan)
     graph.add_node("work", nodo_work)
@@ -160,75 +232,35 @@ def crear_orquestador():
     graph.add_edge("work", "review")
     graph.add_edge("review", "compound")
     graph.add_edge("compound", END)
-    
     return graph.compile()
 
-# ============================================
-# FUNCIÓN: GUARDAR EN SUPABASE
-# ============================================
+# ========== FUNCIONES AUXILIARES ==========
 
-def guardar_en_supabase(mensaje: str, respuesta: str, modelo: str = None, 
+def guardar_en_supabase(mensaje: str, respuesta: str, modelo: str = None,
                         negocio_id: str = None, fuente: str = None, usuario: str = 'anonimo'):
-    """Guarda el historial en Supabase"""
     try:
         from utils.supabase_client import supabase
         return supabase.guardar_historial(
-            mensaje=mensaje,
-            respuesta=respuesta,
-            modelo=modelo,
-            negocio_id=negocio_id,
-            fuente=fuente,
-            usuario=usuario
+            mensaje=mensaje, respuesta=respuesta, modelo=modelo,
+            negocio_id=negocio_id, fuente=fuente, usuario=usuario
         )
-    except ImportError:
-        print('⚠️ Módulo Supabase no disponible')
+    except:
         return False
-    except Exception as e:
-        print(f'⚠️ Error guardando en Supabase: {e}')
-        return False
-
-# ============================================
-# FUNCIÓN: GENERAR RESUMEN EJECUTIVO
-# ============================================
 
 def generar_resumen_ejecutivo(plan_completo: str) -> str:
-    """
-    Genera un resumen ejecutivo del plan (máximo 200 palabras)
-    """
     try:
-        sistema = "Eres un ejecutivo experto en marketing y comunicaciones."
-        prompt = f"""
-        Genera un resumen ejecutivo CONCISO de este plan de marketing.
-        
-        Requisitos:
-        - Máximo 200 palabras
-        - Lenguaje profesional
-        - Incluir: objetivo principal, 3 estrategias clave, y resultado esperado
-        
-        Plan:
-        {plan_completo}
-        """
-        respuesta, fuente = gateway.chat(prompt, sistema)
-        return respuesta
+        sistema = "Eres un ejecutivo experto en marketing. Genera un resumen conciso."
+        prompt = f"Genera un resumen ejecutivo (máximo 200 palabras):\n{plan_completo}"
+        respuesta, fuente = gateway.chat_rapido(prompt, sistema)
+        return limpiar_respuesta(respuesta)
     except Exception as e:
-        return f"Error generando resumen: {str(e)}"
+        return f"Error: {str(e)}"
 
-# ============================================
-# FUNCIÓN: GENERAR PDF
-# ============================================
-
-def generar_pdf_del_plan(contenido: str, titulo: str = "Plan de Marketing", nombre_archivo: str = None) -> str:
-    """
-    Genera un PDF a partir del contenido del plan
-    """
+def generar_pdf_del_plan(contenido: str, titulo: str = "Plan de Marketing") -> str:
     try:
         from utils.pdf_generator import generar_pdf_plan
-        return generar_pdf_plan(contenido, titulo, nombre_archivo)
-    except ImportError:
-        print('⚠️ Módulo PDF no disponible')
-        return None
-    except Exception as e:
-        print(f'⚠️ Error generando PDF: {e}')
+        return generar_pdf_plan(contenido, titulo)
+    except:
         return None
 
 # ========== EJECUTAR ==========
@@ -236,19 +268,22 @@ def generar_pdf_del_plan(contenido: str, titulo: str = "Plan de Marketing", nomb
 def ejecutar_orquestador(mensaje: str, negocio_id: Optional[str] = None) -> dict:
     try:
         print("=" * 60)
-        print("🚀 INICIANDO ORQUESTADOR - VERSIÓN 7.8")
+        print("🚀 INICIANDO ORQUESTADOR - VERSIÓN 8.0")
         print("=" * 60)
         print(f"📝 Mensaje: {mensaje[:100]}...")
         print("-" * 60)
         
+        # Detección de intención
+        if es_mensaje_simple(mensaje):
+            return ejecutar_camino_rapido(mensaje, negocio_id)
+        
+        # Camino completo
+        print("🔄 CAMINO COMPLETO: Tarea compleja")
+        
         orquestador = crear_orquestador()
         estado_inicial = {
-            "mensaje": mensaje,
-            "plan": None,
-            "resultado": None,
-            "paso_actual": "inicio",
-            "historial": [],
-            "negocio_id": negocio_id
+            "mensaje": mensaje, "plan": None, "resultado": None,
+            "paso_actual": "inicio", "historial": [], "negocio_id": negocio_id
         }
         
         resultado = orquestador.invoke(estado_inicial)
@@ -257,80 +292,44 @@ def ejecutar_orquestador(mensaje: str, negocio_id: Optional[str] = None) -> dict
         print("✅ ORQUESTADOR COMPLETADO")
         print("=" * 60)
         
-        # ============================================
-        # GUARDAR EN SUPABASE
-        # ============================================
-        try:
-            modelo_usado = "desconocido"
-            fuente = "desconocida"
-            if resultado.get("historial"):
-                ultimo = resultado["historial"][-1]
-                modelo_usado = ultimo.get("fuente", "desconocido")
-                fuente = ultimo.get("fuente", "desconocida")
-            
-            guardar_en_supabase(
-                mensaje=mensaje,
-                respuesta=resultado.get("resultado", ""),
-                modelo=modelo_usado,
-                negocio_id=negocio_id,
-                fuente=fuente
-            )
-        except Exception as e:
-            print(f'⚠️ No se pudo guardar en Supabase: {e}')
+        guardar_en_supabase(
+            mensaje=mensaje, respuesta=resultado.get("resultado", ""),
+            modelo="openrouter", negocio_id=negocio_id, fuente="nube"
+        )
         
-        # ============================================
-        # GENERAR PDF Y RESUMEN EJECUTIVO
-        # ============================================
         plan_completo = resultado.get("resultado", "")
         pdf_url = None
         resumen = None
         
-        if plan_completo and len(plan_completo) > 100:
-            try:
-                # Generar resumen ejecutivo
-                print("📄 Generando resumen ejecutivo...")
-                resumen = generar_resumen_ejecutivo(plan_completo)
-                
-                # Generar PDF
-                print("📄 Generando PDF...")
-                pdf_url = generar_pdf_del_plan(plan_completo, "Plan de Marketing BuildSmart")
-                if pdf_url:
-                    print(f"✅ PDF guardado en: {pdf_url}")
-            except Exception as e:
-                print(f'⚠️ Error generando documento: {e}')
+        if plan_completo and len(plan_completo) > 500:
+            print("📄 Generando resumen ejecutivo...")
+            resumen = generar_resumen_ejecutivo(plan_completo)
+            print("📄 Generando PDF...")
+            pdf_url = generar_pdf_del_plan(plan_completo, "Plan de Marketing SAMU IA")
+            if pdf_url:
+                print(f"✅ PDF guardado en: {pdf_url}")
         
-        # ============================================
-        # RESULTADO FINAL
-        # ============================================
         return {
-            "mensaje": resultado["mensaje"],
-            "plan": resultado.get("plan", ""),
+            "mensaje": resultado["mensaje"], "plan": resultado.get("plan", ""),
             "resultado": resultado.get("resultado", ""),
-            "resumen_ejecutivo": resumen,
-            "pdf_url": pdf_url,
+            "resumen_ejecutivo": resumen, "pdf_url": pdf_url,
             "paso_actual": resultado.get("paso_actual", "finish"),
             "historial": resultado.get("historial", [])
         }
-        
     except Exception as e:
         print(f"❌ Error en orquestador: {e}")
         return {
-            "mensaje": mensaje,
-            "plan": "",
-            "resultado": f"⚠️ Error: {str(e)}",
-            "resumen_ejecutivo": None,
-            "pdf_url": None,
-            "paso_actual": "error",
-            "historial": []
+            "mensaje": mensaje, "plan": "", "resultado": f"⚠️ Error: {str(e)}",
+            "resumen_ejecutivo": None, "pdf_url": None,
+            "paso_actual": "error", "historial": []
         }
 
-# ============================================
-# PRUEBA
-# ============================================
-
 if __name__ == "__main__":
-    resultado = ejecutar_orquestador("Necesito un plan de marketing para mi negocio de construcción")
-    print(f"\n📌 Resultado:")
-    print(f"   Plan: {resultado['resultado'][:200]}...")
-    print(f"   Resumen: {resultado.get('resumen_ejecutivo', 'No disponible')[:200]}...")
-    print(f"   PDF: {resultado.get('pdf_url', 'No generado')}")
+    print("\n🧪 PRUEBA 1: Saludo")
+    resultado = ejecutar_orquestador("Hola")
+    print(f"📌 Respuesta: {resultado['resultado'][:200]}")
+    
+    print("\n" + "=" * 60)
+    print("\n🧪 PRUEBA 2: Tarea compleja")
+    resultado = ejecutar_orquestador("Necesito un plan de marketing")
+    print(f"📌 Respuesta: {resultado['resultado'][:300]}...")

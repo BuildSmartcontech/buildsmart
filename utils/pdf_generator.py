@@ -12,7 +12,7 @@ class PDFPlan(FPDF):
     
     def header(self):
         self.set_font('Arial', 'B', 14)
-        self.cell(0, 10, 'BuildSmart Holdings - Plan de Marketing', 0, 1, 'C')
+        self.cell(0, 10, 'SAMU IA - Plan de Marketing', 0, 1, 'C')
         self.ln(5)
     
     def footer(self):
